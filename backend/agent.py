@@ -24,10 +24,10 @@ SYSTEM_PROMPT = (
 
 async def _call_llm_api(messages: list[dict]) -> str:
     """Calls OpenAI-compatible or Gemini API endpoint with standard HTTP timeout."""
-    if OPENAI_API_KEY:
+    if OPENAI_API_KEY and OPENAI_API_KEY.strip():
         url = f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions"
         headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Authorization": f"Bearer {OPENAI_API_KEY.strip()}",
             "Content-Type": "application/json",
         }
         payload = {
@@ -42,38 +42,27 @@ async def _call_llm_api(messages: list[dict]) -> str:
             data = resp.json()
             return data["choices"][0]["message"]["content"].strip()
 
-    elif GEMINI_API_KEY:
-        # Gemini API via OpenAI-compatible endpoint or v1beta
-        url = f"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {GEMINI_API_KEY}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": "gemini-2.5-flash",
-            "messages": messages,
-            "temperature": 0.7,
-        }
+    elif GEMINI_API_KEY and GEMINI_API_KEY.strip():
+        key = GEMINI_API_KEY.strip()
+        # Direct Gemini v1beta REST endpoint
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+        contents = []
+        for m in messages:
+            if m["role"] == "system":
+                continue
+            role = "user" if m["role"] == "user" else "model"
+            contents.append({"role": role, "parts": [{"text": m["content"]}]})
+
         async with httpx.AsyncClient(timeout=12.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code == 404 or resp.status_code == 400:
-                # Fallback to direct Gemini v1beta REST endpoint
-                direct_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
-                contents = []
-                for m in messages:
-                    if m["role"] == "system":
-                        continue
-                    role = "user" if m["role"] == "user" else "model"
-                    contents.append({"role": role, "parts": [{"text": m["content"]}]})
-                resp = await client.post(direct_url, json={"contents": contents})
+            resp = await client.post(url, json={"contents": contents})
+            if resp.status_code == 404:
+                # Try gemini-2.0-flash fallback
+                alt_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
+                resp = await client.post(alt_url, json={"contents": contents})
 
             resp.raise_for_status()
             data = resp.json()
-            if "choices" in data:
-                return data["choices"][0]["message"]["content"].strip()
-            elif "candidates" in data:
-                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            return str(data)
+            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
     else:
         # Mock mode when no valid API key is configured
