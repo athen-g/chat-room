@@ -14,6 +14,10 @@ logger = logging.getLogger("agent")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+GROK_API_KEY = os.getenv("GROK_API_KEY") or os.getenv("XAI_API_KEY")
+GROK_MODEL = os.getenv("GROK_MODEL", "grok-beta")
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 SYSTEM_PROMPT = (
@@ -23,8 +27,28 @@ SYSTEM_PROMPT = (
 )
 
 async def _call_llm_api(messages: list[dict]) -> str:
-    """Calls OpenAI-compatible or Gemini API endpoint with standard HTTP timeout."""
-    if OPENAI_API_KEY and OPENAI_API_KEY.strip():
+    """Calls OpenAI, xAI (Grok), or Gemini API endpoint with standard HTTP timeout."""
+    # Option 1: xAI Grok API
+    if GROK_API_KEY and GROK_API_KEY.strip():
+        url = "https://api.x.ai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {GROK_API_KEY.strip()}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": GROK_MODEL,
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 500,
+        }
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"].strip()
+
+    # Option 2: OpenAI / OpenAI-compatible API
+    elif OPENAI_API_KEY and OPENAI_API_KEY.strip():
         url = f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {OPENAI_API_KEY.strip()}",
@@ -42,9 +66,9 @@ async def _call_llm_api(messages: list[dict]) -> str:
             data = resp.json()
             return data["choices"][0]["message"]["content"].strip()
 
+    # Option 3: Gemini API
     elif GEMINI_API_KEY and GEMINI_API_KEY.strip():
         key = GEMINI_API_KEY.strip()
-        # Direct Gemini v1beta REST endpoint
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
         contents = []
         for m in messages:
@@ -56,7 +80,6 @@ async def _call_llm_api(messages: list[dict]) -> str:
         async with httpx.AsyncClient(timeout=12.0) as client:
             resp = await client.post(url, json={"contents": contents})
             if resp.status_code == 404:
-                # Try gemini-2.0-flash fallback
                 alt_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
                 resp = await client.post(alt_url, json={"contents": contents})
 
