@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+.venv/
+env/
+venv/
+
+# Environment & API keys
+.env
+.env.local
+*.env
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Build outputs & caches
+dist/
+build/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
