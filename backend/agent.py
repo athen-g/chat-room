@@ -15,6 +15,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
+GROK_API_KEY = os.getenv("GROK_API_KEY") or os.getenv("XAI_API_KEY")
+GROK_MODEL = os.getenv("GROK_MODEL", "grok-beta")
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 SYSTEM_PROMPT = (
@@ -24,15 +27,33 @@ SYSTEM_PROMPT = (
 )
 
 async def _call_llm_api(messages: list[dict]) -> str:
-    """Calls OpenAI or Gemini API endpoint with standard HTTP timeout."""
-    # Option 1: OpenAI or OpenAI-compatible endpoint (OpenRouter, local LLM, etc.)
-    if OPENAI_API_KEY and OPENAI_API_KEY.strip():
+    """Calls OpenAI, xAI (Grok), or Gemini API endpoint with standard HTTP timeout."""
+    # Option 1: xAI Grok API
+    if GROK_API_KEY and GROK_API_KEY.strip():
+        url = "https://api.x.ai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {GROK_API_KEY.strip()}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": GROK_MODEL,
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 500,
+        }
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"].strip()
+
+    # Option 2: OpenAI / OpenAI-compatible API
+    elif OPENAI_API_KEY and OPENAI_API_KEY.strip():
         url = f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {OPENAI_API_KEY.strip()}",
             "Content-Type": "application/json",
         }
-        # Add OpenRouter headers if using OpenRouter
         if "openrouter.ai" in OPENAI_BASE_URL:
             headers["HTTP-Referer"] = "http://localhost:5173"
             headers["X-Title"] = "Multiplayer Chat Room"
@@ -49,10 +70,9 @@ async def _call_llm_api(messages: list[dict]) -> str:
             data = resp.json()
             return data["choices"][0]["message"]["content"].strip()
 
-    # Option 2: Google Gemini API (v1beta REST)
+    # Option 3: Gemini API (tries modern gemini-2.0-flash / gemini-3.6-flash first)
     elif GEMINI_API_KEY and GEMINI_API_KEY.strip():
         key = GEMINI_API_KEY.strip()
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
 
         contents = []
         for m in messages:
@@ -71,18 +91,18 @@ async def _call_llm_api(messages: list[dict]) -> str:
                 "parts": [{"text": " ".join(system_msgs)}]
             }
 
+        gemini_models = ["gemini-2.0-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(url, json=payload)
-            if resp.status_code != 200:
-                # Try fallback model gemini-2.0-flash
-                alt_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
-                resp = await client.post(alt_url, json=payload)
+            for model_name in gemini_models:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+                resp = await client.post(url, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
             resp.raise_for_status()
-            data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
-    # Option 3: Fallback Mock Mode when no key is set
+    # Option 4: Mock mode when no valid API key is configured
     else:
         await asyncio.sleep(0.8)
         last_user_msg = messages[-1]["content"] if messages else ""
@@ -125,7 +145,8 @@ async def process_agent_request(room_id: str, user_id: str, prompt: str) -> str:
         return f"@{user_id} @agent couldn't respond right now — request timed out after 15s."
     except Exception as e:
         logger.error(f"LLM call failed for user {user_id} in room {room_id}: {e}")
-        return f"@{user_id} @agent encountered an error while generating a response — please try again."
+        err_snippet = str(e)[:120]
+        return f"@{user_id} @agent encountered an error: {err_snippet}"
 
     agent_thread_entry = AgentThreadMessage(
         room_id=room_id,

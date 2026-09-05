@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from typing import Dict, Set
 from fastapi import WebSocket
 from models import ChatMessage, OutboundChatMessage, OutboundThinking, OutboundError, MessageRole
@@ -11,12 +12,16 @@ logger = logging.getLogger("rooms")
 
 class RoomManager:
     def __init__(self):
-        # room_id -> set of WebSocket connections
+        # room_id -> set of active WebSocket connections
         self.active_rooms: Dict[str, Set[WebSocket]] = {}
-        # room_id -> asyncio.Lock (for serializing DB writes and sequence ordering per room)
+        # room_id -> asyncio.Lock (PERSISTENT per room_id to ensure mutex integrity)
         self.room_locks: Dict[str, asyncio.Lock] = {}
 
     def get_lock(self, room_id: str) -> asyncio.Lock:
+        """
+        Returns persistent asyncio.Lock per room_id.
+        Lock persists for process lifetime to prevent lock recreation race conditions on disconnect.
+        """
         if room_id not in self.room_locks:
             self.room_locks[room_id] = asyncio.Lock()
         return self.room_locks[room_id]
@@ -33,8 +38,9 @@ class RoomManager:
             self.active_rooms[room_id].discard(websocket)
             if not self.active_rooms[room_id]:
                 del self.active_rooms[room_id]
-                if room_id in self.room_locks:
-                    del self.room_locks[room_id]
+                # CRITICAL BUG FIX: Never delete room_locks[room_id] here.
+                # Keeping the lock object persistent guarantees that any in-flight background
+                # tasks and newly joining clients serialize on the exact same Lock instance.
         logger.info(f"Client disconnected from room {room_id}")
 
     async def broadcast_to_room(self, room_id: str, payload: dict):
@@ -57,10 +63,11 @@ class RoomManager:
         await self.broadcast_to_room(room_id, thinking_payload)
 
     async def handle_user_message(self, room_id: str, user_id: str, raw_content: str):
-        content = raw_content.strip()
-        if not content:
+        if not raw_content or not raw_content.strip():
             return
 
+        # Sanitize & clamp message size (max 4000 chars)
+        content = raw_content.strip()[:4000]
         lock = self.get_lock(room_id)
 
         # Create & save user message under room lock
@@ -84,8 +91,8 @@ class RoomManager:
             ).model_dump()
             await self.broadcast_to_room(room_id, outbound_msg)
 
-        # Check if message addresses @agent
-        if "@agent" in content.lower():
+        # Word-boundary regex check for @agent trigger (prevents false positives like @agentic)
+        if re.search(r'\b@agent\b', content, re.IGNORECASE):
             # Trigger agent response as background task so WS loop remains responsive
             asyncio.create_task(self._process_and_broadcast_agent(room_id, user_id, content))
 
