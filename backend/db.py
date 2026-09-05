@@ -59,13 +59,11 @@ async def init_db(db_path: Optional[str] = None):
         await db.commit()
 
 async def ensure_room_exists(room_id: str):
+    """Atomically ensures room entry exists in SQLite without race conditions."""
     async with get_db() as db:
-        async with db.execute("SELECT id FROM rooms WHERE id = ?", (room_id,)) as cursor:
-            row = await cursor.fetchone()
-            if not row:
-                now = datetime.now(timezone.utc).isoformat()
-                await db.execute("INSERT INTO rooms (id, created_at) VALUES (?, ?)", (room_id, now))
-                await db.commit()
+        now = datetime.now(timezone.utc).isoformat()
+        await db.execute("INSERT OR IGNORE INTO rooms (id, created_at) VALUES (?, ?)", (room_id, now))
+        await db.commit()
 
 async def save_message(message: ChatMessage) -> ChatMessage:
     await ensure_room_exists(message.room_id)

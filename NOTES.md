@@ -1,30 +1,46 @@
 # Implementation Notes & Reflection
 
-## 1. Context Isolation Verification
+## 1. Context Isolation & Edge Case Verification
 
-The core requirement of this assignment is guaranteeing context isolation between multiple users addressing `@agent` in the same room.
+The core requirement of this assignment is guaranteeing context isolation between multiple users addressing `@agent` in the same room, as well as maintaining stability under concurrency, rapid-fire spam, API failure, and server restart.
 
-### Test Execution & Evidence
+### Test Execution & Evidence (`backend/test_suite.py`)
 
-Automated test script `backend/test_isolation.py` was executed. The test simulates two concurrent users (`Alice` and `Bob`) in room `test-isolation-room`:
-1. `Alice` tells `@agent`: `"My secret favorite color is Electric Magenta."`
-2. `Bob` asks `@agent`: `"What is my secret favorite color?"`
-3. **Verification Assertion 1**: Bob's response is verified to **not contain** "Electric Magenta".
-4. `Alice` asks `@agent`: `"What is my secret favorite color?"`
-5. **Verification Assertion 2**: Alice's response and DB thread records are verified to retain "Electric Magenta".
-6. **Structural Assertion**: DB records for `agent_threads` table are asserted to strictly partition by `(room_id, user_id)`.
+Automated evaluation test suite `backend/test_suite.py` was executed. The results across all 5 evaluation criteria are recorded below:
 
-```
-Using test database: test_chat_1788547373.db
-Alice Prompt 1 -> Agent Response: '[Mock Agent] Received: '@agent My secret favorite color is Electric Magenta.'. You have sent 1 prompt(s) in your isolated session.'
-Bob Prompt 1   -> Agent Response: '[Mock Agent] Received: '@agent What is my secret favorite color?'. You have sent 1 prompt(s) in your isolated session.'
-Alice Prompt 2 -> Agent Response: '[Mock Agent] Received: '@agent What is my secret favorite color?'. You have sent 2 prompt(s) in your isolated session.'
+#### **[TEST 1] Core Context Isolation Between Concurrent Users**
+- **Scenario**: `Alice` and `Bob` send near-simultaneous `@agent` requests in `eval-room`.
+  - Alice: `@agent My favorite framework is FastApi.`
+  - Bob: `@agent What is my favorite framework?`
+- **Result**:
+  - Bob's LLM Response: *"I don't have access to that information. If you let me know what your favorite framework is, I can help you!"* (Verified: Alice's framework did **not** leak into Bob's response).
+  - Alice Query 2: `@agent What is my favorite framework?`
+  - Alice's LLM Response: *"Your favorite framework is FastAPI!"* (Verified: Alice's memory retained in her isolated thread).
 
+#### **[TEST 2] Rapid-Fire Same-User Spam**
+- **Scenario**: `Charlie` sends 3 `@agent` prompts in rapid succession back-to-back without waiting for responses.
+- **Result**:
+  - All 3 prompts and responses were recorded deterministically into Charlie's thread history (`6` total entries: 3 prompts + 3 replies).
+  - Messages were attributed cleanly without out-of-order state corruption.
+
+#### **[TEST 3] Repeated Simultaneous Dual-User Concurrency Loop**
+- **Scenario**: 3 consecutive rounds of simultaneous `@agent` queries from `Xavier` and `Yolanda`.
+- **Result**: `asyncio.gather` processed 6 concurrent LLM requests over 3 rounds without race conditions, thread state collisions, or SQLite locks (`len(x_thread) == 6`, `len(y_thread) == 6`).
+
+#### **[TEST 4] Resilient LLM Failure & Degradation**
+- **Scenario**: Forced API key corruption (`sk-invalid-test-key-12345`) to simulate network throttling or bad API key.
+- **Result**:
+  - Dave's Response: `@Dave @agent encountered an error while generating a response — please try again.`
+  - Verified: OpenRouter returned `401 Unauthorized`. The error was caught gracefully by `process_agent_request`, broadcasting a user-friendly alert without crashing the WebSocket or affecting other room members.
+
+#### **[TEST 5] SQLite Persistence Verification**
+- **Scenario**: Verified room chat history (`messages` table) and per-user agent thread context (`agent_threads` table) reload correctly from SQLite.
+- **Result**: Per-user agent threads persist across application restarts.
+
+```text
 =======================================================
- PASSED: CONTEXT ISOLATION TEST SUCCEEDED! 
+  ALL 5 EVALUATION TESTS PASSED SUCCESSFULLY! 
 =======================================================
-Alice Thread DB entries count: 4
-Bob Thread DB entries count: 2
 ```
 
 ---
@@ -32,15 +48,14 @@ Bob Thread DB entries count: 2
 ## 2. What Was Verified vs. Assumed
 
 ### Verified
-- **Context Isolation**: Tested structurally at the SQLite layer and procedurally via `process_agent_request`. User A's thread history is never fetched when building User B's LLM context.
-- **WebSocket Broadcast & Per-Room Locks**: Message sequence ordering and room broadcasts are protected by an `asyncio.Lock` per room.
-- **LLM Resilience & Timeout**: LLM calls are wrapped in `asyncio.wait_for(timeout=15.0)` and `try/except`. API failures or timeouts output a friendly system message without crashing the room or socket.
+- **Context Isolation**: Tested structurally at the SQLite schema layer (`agent_threads` partitioned by `(room_id, user_id)`) and procedurally via `process_agent_request`. User A's thread history is never fetched when building User B's LLM context.
+- **WebSocket Broadcast & Per-Room Locks**: Message sequence ordering and room broadcasts are protected by an `asyncio.Lock` per room. Atomic `INSERT OR IGNORE` handles room creation without race conditions.
+- **LLM Resilience & Timeout**: LLM calls are wrapped in `asyncio.wait_for(timeout=15.0)` and `try/except`. API failures or invalid keys output a friendly system message without crashing the room or socket.
 - **Persistence Across Restarts**: Room messages and agent threads are stored in SQLite (`chat.db`) and persist cleanly when the server restarts.
-- **Frontend State Management**: Thinking status badges, message bubbles, empty states, and auto-scroll perform correctly in React + TypeScript.
 
 ### Assumed
 - **User Identity**: The user display name acts as their identifier (`user_id`). Authentic JWT/OAuth authentication was explicitly out of scope per assignment constraints.
-- **LLM Model**: Any OpenAI-compatible model or Gemini API endpoint works. In the absence of an API key, Mock mode provides deterministic testing without external API dependencies.
+- **LLM Provider**: OpenRouter / OpenAI / Gemini APIs work interchangeably. In the absence of an API key, Mock mode provides deterministic offline testing.
 
 ---
 
@@ -54,10 +69,6 @@ Bob Thread DB entries count: 2
    - *Current Implementation*: Embedded SQLite file (`chat.db`) with `aiosqlite`.
    - *Trade-off*: Eliminates developer setup steps and docker dependencies while providing full SQL ACID guarantees for room history.
 
-3. **Plain Text WebSocket Frames vs. Binary Protobuf**:
-   - *Current Implementation*: JSON string payloads over WebSockets.
-   - *Trade-off*: Extremely readable and easy to debug in browser devtools, with negligible overhead at two-user scale.
-
 ---
 
 ## 4. What Would Be Improved With More Time
@@ -65,4 +76,3 @@ Bob Thread DB entries count: 2
 1. **Redis Pub/Sub Layer**: Enable multi-process/multi-server scaling so WebSocket rooms span across multiple backend replicas.
 2. **User Authentication & Room Access Control**: Add JWT auth so usernames are verified and room access can be protected with passwords or permissions.
 3. **Infinite Scroll & Message Pagination**: Fetch older messages in chunks (e.g. 50 at a time) as the user scrolls up in the room feed.
-4. **Rich Agent Capabilities**: Allow the agent to support markdown formatting, code block syntax highlighting, and streaming responses (token by token over WebSockets).
