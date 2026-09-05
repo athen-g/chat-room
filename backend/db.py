@@ -12,6 +12,9 @@ async def get_db(path: Optional[str] = None):
     target_path = path or os.environ.get("DB_PATH", "chat.db")
     conn = await aiosqlite.connect(target_path)
     conn.row_factory = aiosqlite.Row
+    # Hardening SQLite for high concurrent write performance
+    await conn.execute("PRAGMA journal_mode = WAL;")
+    await conn.execute("PRAGMA busy_timeout = 5000;")
     await conn.execute("PRAGMA foreign_keys = ON;")
     try:
         yield conn

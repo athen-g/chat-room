@@ -30,8 +30,8 @@ Automated evaluation test suite `backend/test_suite.py` was executed. The result
 #### **[TEST 4] Resilient LLM Failure & Degradation**
 - **Scenario**: Forced API key corruption (`sk-invalid-test-key-12345`) to simulate network throttling or bad API key.
 - **Result**:
-  - Dave's Response: `@Dave @agent encountered an error while generating a response — please try again.`
-  - Verified: OpenRouter returned `401 Unauthorized`. The error was caught gracefully by `process_agent_request`, broadcasting a user-friendly alert without crashing the WebSocket or affecting other room members.
+  - Dave's Response: `@Dave @agent encountered an error: Client error '401 Unauthorized' for url 'https://openrouter.ai/api/v1/chat/completions'`
+  - Verified: OpenRouter returned `401 Unauthorized`. The error was caught gracefully, broadcasting a user-friendly system alert in the room UI without crashing the WebSocket or affecting other room members.
 
 #### **[TEST 5] SQLite Persistence Verification**
 - **Scenario**: Verified room chat history (`messages` table) and per-user agent thread context (`agent_threads` table) reload correctly from SQLite.
@@ -49,8 +49,8 @@ Automated evaluation test suite `backend/test_suite.py` was executed. The result
 
 ### Verified
 - **Context Isolation**: Tested structurally at the SQLite schema layer (`agent_threads` partitioned by `(room_id, user_id)`) and procedurally via `process_agent_request`. User A's thread history is never fetched when building User B's LLM context.
-- **WebSocket Broadcast & Per-Room Locks**: Message sequence ordering and room broadcasts are protected by an `asyncio.Lock` per room. Atomic `INSERT OR IGNORE` handles room creation without race conditions.
-- **LLM Resilience & Timeout**: LLM calls are wrapped in `asyncio.wait_for(timeout=15.0)` and `try/except`. API failures or invalid keys output a friendly system message without crashing the room or socket.
+- **WebSocket Broadcast & Per-Room Locks**: Message sequence ordering and room broadcasts are protected by a persistent `asyncio.Lock` per room. Atomic `INSERT OR IGNORE` handles room creation without race conditions.
+- **LLM Resilience & Timeout**: LLM calls are wrapped in `asyncio.wait_for(timeout=15.0)` and `try/except`. API failures or invalid keys surface a transparent error message in the chat room UI without crashing the socket.
 - **Persistence Across Restarts**: Room messages and agent threads are stored in SQLite (`chat.db`) and persist cleanly when the server restarts.
 
 ### Assumed
@@ -65,9 +65,9 @@ Automated evaluation test suite `backend/test_suite.py` was executed. The result
    - *Current Implementation*: Room connection maps are kept in server memory (`RoomManager.active_rooms`).
    - *Trade-off*: Suitable for a single backend server instance (as required by the assignment timebox). In a horizontally scaled multi-node environment, Redis Pub/Sub would be used to distribute socket events across nodes.
 
-2. **SQLite vs. PostgreSQL**:
-   - *Current Implementation*: Embedded SQLite file (`chat.db`) with `aiosqlite`.
-   - *Trade-off*: Eliminates developer setup steps and docker dependencies while providing full SQL ACID guarantees for room history.
+2. **SQLite Hardening & Connection Management**:
+   - *Current Implementation*: Embedded SQLite with `aiosqlite`. Hardened with Write-Ahead Logging (`PRAGMA journal_mode = WAL;`) and a 5,000ms busy timeout (`PRAGMA busy_timeout = 5000;`) to eliminate lock contention during concurrent write spikes.
+   - *Trade-off*: Connections are opened per-query via `async with get_db()`. For extreme multi-thousand QPS loads, a connection pool (or PostgreSQL engine) would reduce per-query connection overhead.
 
 ---
 

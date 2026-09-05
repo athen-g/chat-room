@@ -94,6 +94,16 @@ export function useRoomSocket(roomId: string, userId: string) {
           });
         } else if (data.type === 'error') {
           console.error('Socket error received:', data.message);
+          // Render error visibly in the room message log as a system-style notification
+          const errSystemMsg: ChatMessage = {
+            id: Date.now(),
+            room_id: roomId,
+            user_id: 'SYSTEM',
+            role: 'system',
+            content: data.message || 'An unexpected error occurred.',
+            created_at: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, errSystemMsg]);
         }
       } catch (err) {
         console.error('Failed to parse WebSocket payload:', err);
