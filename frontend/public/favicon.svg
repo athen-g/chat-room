@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Carbon CRT Background -->
+  <rect width="64" height="64" fill="#0A0A0A"/>
+  
+  <!-- Outer Hazard Border -->
+  <rect x="2" y="2" width="60" height="60" fill="none" stroke="#FF2A2A" stroke-width="2"/>
+  
+  <!-- Corner Crosshairs -->
+  <path d="M 6,10 H 14 M 10,6 V 14" stroke="#4AF626" stroke-width="1.5"/>
+  <path d="M 50,10 H 58 M 54,6 V 14" stroke="#4AF626" stroke-width="1.5"/>
+  <path d="M 6,54 H 14 M 10,50 V 58" stroke="#4AF626" stroke-width="1.5"/>
+  <path d="M 50,54 H 58 M 54,50 V 58" stroke="#4AF626" stroke-width="1.5"/>
+  
+  <!-- Tactical Prompt Chevron & Block -->
+  <path d="M 18,22 L 30,32 L 18,42" fill="none" stroke="#FF2A2A" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <rect x="36" y="22" width="12" height="20" fill="#4AF626"/>
+</svg>
