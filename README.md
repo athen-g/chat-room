@@ -20,8 +20,8 @@ The primary architectural requirement of this application is **context isolation
 ### 1. Transport: WebSockets
 - **Rationale**: Chat rooms are naturally bi-directional. Both users send messages to the server and receive incoming messages and real-time state updates (such as `"Agent is thinking for @UserA..."`). WebSockets provide low-latency, full-duplex communication over a single connection, avoiding the overhead of HTTP polling or unidirectional SSE streams.
 
-### 2. Persistence: SQLite (`aiosqlite`)
-- **Rationale**: SQLite provides zero-configuration, self-contained persistence. Messages and agent context survive backend restarts cleanly without requiring external database servers (like PostgreSQL or Redis) to run locally. Async `aiosqlite` is used to maintain high throughput on FastAPI's async event loop.
+### 2. Persistence & Hardening: SQLite (`aiosqlite` with WAL Mode)
+- **Rationale**: SQLite provides zero-configuration, self-contained persistence. Hardened with Write-Ahead Logging (`PRAGMA journal_mode = WAL;`) and a 5,000ms busy timeout (`PRAGMA busy_timeout = 5000;`) to eliminate lock contention during concurrent write spikes. Messages and agent context survive backend restarts cleanly without requiring external database servers (like PostgreSQL or Redis) to run locally.
 
 ---
 
@@ -33,30 +33,30 @@ The primary architectural requirement of this application is **context isolation
 
 ---
 
-## Quick Start
+## Quick Start Guide
 
 ### 1. Backend Setup
 
 ```bash
-# Navigate to project root
-cd f:\assignment
+# Navigate to backend directory
+cd backend
 
 # Install backend dependencies
-python -m pip install -r backend/requirements.txt
+python -m pip install -r requirements.txt
 
-# (Optional) Copy .env.example to backend/.env and set your LLM API Key
+# (Optional) Copy .env.example to .env and set your LLM API Key
 # If no key is set, the server runs in deterministic Mock Agent mode for offline testing.
-cp backend/.env.example backend/.env
+cp .env.example .env
 
 # Run FastAPI backend server (runs on http://localhost:8000)
-python backend/main.py
+python main.py
 ```
 
 ### 2. Frontend Setup
 
 ```bash
 # Navigate to frontend directory
-cd f:\assignment\frontend
+cd frontend
 
 # Install frontend dependencies
 npm install
@@ -66,38 +66,40 @@ npm run dev
 ```
 
 Open `http://localhost:5173` in two separate browser tabs (or windows):
-1. Tab 1: Name `Alice`, Room Code `demo-room`
-2. Tab 2: Name `Bob`, Room Code `demo-room`
+1. Tab 1: Name `OPERATOR_ALICE`, Room Code `ALPHA-ROOM`
+2. Tab 2: Name `OPERATOR_BOB`, Room Code `ALPHA-ROOM`
 
 ---
 
-## Running Automated Tests
+## Running Automated Test Suites
 
-To run the automated context isolation test suite:
+The codebase includes 3 automated test suites covering context isolation, concurrency loops, failure degradation, and load performance:
 
+### 1. Comprehensive 5-Scenario Evaluation Test Suite (Recommended)
+Evaluates all 5 core rubric criteria: multi-user context isolation, rapid-fire spam handling, repeated concurrency loops, LLM failure degradation, and SQLite persistence.
+```bash
+python backend/test_suite.py
+```
+
+### 2. High Concurrency WebSocket Stress Test
+Simulates 10 concurrent WebSocket clients sending simultaneous human messages and `@agent` queries under heavy load.
+```bash
+python backend/stress_test.py
+```
+
+### 3. Basic Context Isolation Test
+Quick procedural verification of per-user thread separation.
 ```bash
 python backend/test_isolation.py
-```
-
-Expected Output:
-```
-Using test database: test_chat_xxxxxx.db
-Alice Prompt 1 -> Agent Response: '[Mock Agent] ...'
-Bob Prompt 1   -> Agent Response: '[Mock Agent] ...'
-Alice Prompt 2 -> Agent Response: '[Mock Agent] ...'
-
-=======================================================
- PASSED: CONTEXT ISOLATION TEST SUCCEEDED! 
-=======================================================
-Alice Thread DB entries count: 4
-Bob Thread DB entries count: 2
 ```
 
 ---
 
 ## LLM Provider Configuration
 
-The backend supports:
-1. **OpenAI API**: Set `OPENAI_API_KEY` and optional `OPENAI_MODEL` / `OPENAI_BASE_URL` in `backend/.env`.
-2. **Google Gemini API**: Set `GEMINI_API_KEY` in `backend/.env`.
-3. **Mock Mode (Default Fallback)**: If no keys are configured, the backend automatically uses a mock LLM responder that confirms per-user thread isolation and echo responses without hanging or failing.
+The backend supports **3 LLM providers** (evaluated in priority order) plus a deterministic Mock Mode:
+
+1. **xAI Grok API**: Set `GROK_API_KEY` and optional `GROK_MODEL` (e.g. `grok-beta` or `grok-2-latest`) in `backend/.env`.
+2. **OpenAI / OpenRouter API**: Set `OPENAI_API_KEY`, `OPENAI_MODEL` (e.g. `openai/gpt-4o-mini`), and `OPENAI_BASE_URL` (e.g. `https://openrouter.ai/api/v1` or `https://api.openai.com/v1`) in `backend/.env`.
+3. **Google Gemini API**: Set `GEMINI_API_KEY` in `backend/.env`.
+4. **Mock Mode (Default Fallback)**: If no keys are configured, the backend automatically operates in deterministic Mock Mode for offline testing without external dependencies.
