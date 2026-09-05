@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, LogOut, Copy, Check, Bot, AlertCircle } from 'lucide-react';
 import { useRoomSocket } from '../hooks/useRoomSocket';
 import { MessageBubble } from './MessageBubble';
 
@@ -43,66 +42,75 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ roomId, userId, onLeave }) =
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-4xl mx-auto bg-slate-900 border-x border-slate-800 shadow-2xl">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-10">
+    <div className="flex flex-col h-screen max-w-5xl mx-auto bg-panel border-x-2 border-neutral-800 font-mono text-phosphor selection:bg-hazard selection:text-black">
+      {/* Top Telemetry Bar */}
+      <div className="bg-black border-b-2 border-neutral-800 p-2.5 px-4 flex justify-between items-center text-xs tracking-wider uppercase">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-400">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-bold text-lg text-white font-mono">{roomId}</h2>
-              <button
-                onClick={handleCopyRoomCode}
-                className="p-1 text-slate-400 hover:text-white transition-colors"
-                title="Copy Room Code"
-              >
-                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className={`w-2 h-2 rounded-full ${
-                status === 'connected' ? 'bg-emerald-500 animate-pulse' :
-                status === 'connecting' ? 'bg-amber-500' : 'bg-rose-500'
-              }`} />
-              <span className="text-slate-400 capitalize">{status}</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-slate-400">User: <strong className="text-indigo-400">{userId}</strong></span>
-            </div>
-          </div>
+          <span className="text-hazard font-extrabold">// SECTOR LINK:</span>
+          <span className="bg-neutral-900 border border-neutral-700 px-2 py-0.5 font-bold text-white font-mono">{roomId}</span>
+          <button
+            onClick={handleCopyRoomCode}
+            className="text-[10px] bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 px-2 py-0.5 text-neutral-300 transition-colors"
+          >
+            {copied ? '[ COPIED ]' : '[ COPY CODE ]'}
+          </button>
         </div>
 
-        <button
-          onClick={onLeave}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 bg-slate-800 hover:bg-rose-950/30 border border-slate-700 hover:border-rose-800/50 rounded-lg transition-all"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Leave</span>
-        </button>
-      </header>
+        <div className="flex items-center gap-4 text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2.5 h-2.5 ${
+              status === 'connected' ? 'bg-terminal animate-pulse' :
+              status === 'connecting' ? 'bg-amber-500' : 'bg-hazard'
+            }`} />
+            <span className="text-neutral-300 font-bold">{status}</span>
+          </div>
 
-      {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-2">
+          <span className="text-neutral-600">|</span>
+
+          <div className="text-neutral-400">
+            OPERATOR: <strong className="text-white">{userId}</strong>
+          </div>
+
+          <button
+            onClick={onLeave}
+            className="bg-neutral-900 hover:bg-hazard hover:text-black border border-neutral-700 text-neutral-400 font-bold px-2.5 py-1 text-[10px] transition-colors"
+          >
+            [ LEAVE SECTOR ]
+          </button>
+        </div>
+      </div>
+
+      {/* Context Isolation Banner */}
+      <div className="bg-neutral-950 border-b border-neutral-800 p-2 px-4 text-[10px] text-neutral-400 flex justify-between items-center uppercase tracking-widest font-mono">
+        <div className="flex items-center gap-2">
+          <span className="text-hazard font-bold">/// CONTEXT_ISOLATION:</span>
+          <span>PER-USER AGENT THREADS PARTITIONED IN SQLITE</span>
+        </div>
+        <div className="text-neutral-600">
+          THREAD_ID: [{roomId} // {userId}]
+        </div>
+      </div>
+
+      {/* Messages Feed Container */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2 bg-crt">
         {status === 'error' && (
-          <div className="p-3 bg-rose-950/40 border border-rose-800/50 rounded-xl text-rose-300 text-sm flex items-center gap-2 my-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>Connection error. Attempting to reconnect...</span>
+          <div className="p-3 bg-neutral-900 border-2 border-hazard text-hazard text-xs uppercase font-mono mb-4 flex items-center justify-between">
+            <span>[ ERROR // LINK DISRUPTED — ATTEMPTING RECONNECT ]</span>
+            <span className="animate-ping">///</span>
           </div>
         )}
 
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4 my-12">
-            <div className="w-16 h-16 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
-              <Bot className="w-8 h-8 text-indigo-400" />
+          <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4 my-12 border-2 border-dashed border-neutral-800 bg-black/50">
+            <div className="text-2xl text-neutral-600 font-extrabold">
+              [ NO TRANSMISSIONS IN SECTOR ]
             </div>
-            <div className="max-w-md space-y-1">
-              <h3 className="text-lg font-semibold text-slate-200">Room is empty & quiet</h3>
-              <p className="text-sm text-slate-400">
-                Share room code <code className="bg-slate-800 px-1.5 py-0.5 rounded text-indigo-300 font-mono">{roomId}</code> with another user to chat live!
+            <div className="max-w-md space-y-2 text-xs text-neutral-400 uppercase">
+              <p>
+                SHARE SECTOR CODE <span className="bg-neutral-800 text-white px-2 py-0.5 font-bold border border-neutral-700">{roomId}</span> WITH ANOTHER OPERATOR TO BEGIN MULTIPLAYER CHAT.
               </p>
-              <p className="text-xs text-slate-500 mt-2">
-                Tip: Type <span className="text-purple-400 font-semibold">@agent</span> in your message to prompt the AI assistant.
+              <p className="text-hazard pt-2">
+                &gt;&gt; TYPE <span className="underline font-bold">@agent</span> IN YOUR TRANSMISSION TO INSTRUCT THE AI PARTICIPANT.
               </p>
             </div>
           </div>
@@ -112,52 +120,55 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ roomId, userId, onLeave }) =
           ))
         )}
 
-        {/* Thinking Indicator */}
+        {/* Thinking State Indicators */}
         {thinkingUsers.map((thinkingUser) => (
-          <div key={thinkingUser} className="flex items-center gap-2 my-2 text-xs text-purple-300 bg-purple-950/40 border border-purple-800/40 rounded-xl px-4 py-2 w-fit">
-            <Bot className="w-4 h-4 text-purple-400 animate-spin" />
-            <span>Agent is thinking for <strong>@{thinkingUser}</strong>...</span>
+          <div key={thinkingUser} className="my-3 p-3 bg-black border-2 border-hazard text-hazard font-mono text-xs uppercase flex items-center gap-3 w-fit">
+            <span className="w-2.5 h-2.5 bg-hazard animate-ping"></span>
+            <span>[ TELEMETRY // AGENT IS COMPUTING RESPONSE FOR @{thinkingUser} ... ]</span>
           </div>
         ))}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Bar */}
-      <footer className="p-4 bg-slate-900 border-t border-slate-800">
-        <form onSubmit={handleSend} className="flex flex-col gap-2">
-          <div className="relative flex items-center">
+      {/* Input Control Bar */}
+      <div className="p-4 bg-black border-t-2 border-neutral-800">
+        <form onSubmit={handleSend} className="space-y-2">
+          <div className="flex justify-between text-[10px] text-neutral-500 uppercase font-mono">
+            <span>&gt;&gt; TRANSMISSION BUFFER</span>
+            <span>KEYBOARD TRIGGER: @agent &lt;PROMPT&gt;</span>
+          </div>
+
+          <div className="flex gap-2">
             <input
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder={`Type a message... (use @agent to address AI)`}
+              placeholder={`TYPE TRANSMISSION... (MENTION @agent TO QUERY AI)`}
               disabled={status !== 'connected'}
-              className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl pl-4 pr-24 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 transition-all"
+              className="flex-1 bg-neutral-950 border border-neutral-700 focus:border-hazard p-3 text-xs md:text-sm text-white placeholder-neutral-700 focus:outline-none uppercase font-mono disabled:opacity-40 transition-colors"
             />
 
-            <div className="absolute right-2 flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleAddAgentTrigger}
-                title="Add @agent to prompt"
-                className="px-2.5 py-1 text-xs font-semibold bg-purple-900/60 hover:bg-purple-800 text-purple-300 border border-purple-700/50 rounded-lg transition-all flex items-center gap-1"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>@agent</span>
-              </button>
+            <button
+              type="button"
+              onClick={handleAddAgentTrigger}
+              className="bg-neutral-900 hover:bg-neutral-800 text-hazard border border-neutral-700 hover:border-hazard px-3 text-xs font-bold uppercase transition-colors flex items-center gap-1"
+              title="Append @agent prompt trigger"
+            >
+              <span>+ @agent</span>
+            </button>
 
-              <button
-                type="submit"
-                disabled={!inputText.trim() || status !== 'connected'}
-                className="p-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={!inputText.trim() || status !== 'connected'}
+              className="bg-hazard hover:bg-red-600 disabled:opacity-40 text-black font-extrabold px-5 text-xs uppercase tracking-wider transition-all border border-hazard flex items-center gap-2"
+            >
+              <span>[ TRANSMIT ]</span>
+              <span>&gt;&gt;</span>
+            </button>
           </div>
         </form>
-      </footer>
+      </div>
     </div>
   );
 };

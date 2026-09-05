@@ -1,14 +1,75 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Multiplayer Chat Room</title>
+    <title>TACTICAL TELEMETRY // AI MULTIPLAYER TERMINAL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,700;0,800;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              mono: ['"JetBrains Mono"', '"Space Mono"', 'monospace'],
+            },
+            colors: {
+              hazard: '#FF2A2A',
+              terminal: '#4AF626',
+              phosphor: '#EAEAEA',
+              crt: '#0A0A0A',
+              panel: '#121212',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Industrial Brutalist Tactical Telemetry Styles */
+      * {
+        border-radius: 0px !important; /* Strict 90 degree corners everywhere */
+        font-family: 'JetBrains Mono', 'Space Mono', monospace;
+      }
+      body {
+        background-color: #0A0A0A;
+        color: #EAEAEA;
+      }
+      /* Simulated CRT Scanlines */
+      .crt-overlay {
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0),
+          rgba(0, 0, 0, 0) 2px,
+          rgba(0, 0, 0, 0.3) 2px,
+          rgba(0, 0, 0, 0.3) 4px
+        );
+        pointer-events: none;
+      }
+      /* Noise Grain Texture */
+      .noise-bg {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 0);
+        background-size: 4px 4px;
+      }
+      /* High-contrast scrollbars */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0A0A0A;
+        border-left: 1px solid #262626;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #FF2A2A;
+      }
+    </style>
   </head>
-  <body class="bg-slate-900 text-slate-100 antialiased min-h-screen">
+  <body class="bg-crt text-phosphor antialiased min-h-screen selection:bg-hazard selection:text-black">
     <div id="root"></div>
+    <div class="fixed inset-0 crt-overlay z-50 pointer-events-none opacity-40"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
