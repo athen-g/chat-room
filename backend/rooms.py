@@ -38,9 +38,7 @@ class RoomManager:
             self.active_rooms[room_id].discard(websocket)
             if not self.active_rooms[room_id]:
                 del self.active_rooms[room_id]
-                # CRITICAL BUG FIX: Never delete room_locks[room_id] here.
-                # Keeping the lock object persistent guarantees that any in-flight background
-                # tasks and newly joining clients serialize on the exact same Lock instance.
+                # Lock object remains persistent to guarantee mutex safety
         logger.info(f"Client disconnected from room {room_id}")
 
     async def broadcast_to_room(self, room_id: str, payload: dict):
@@ -91,8 +89,8 @@ class RoomManager:
             ).model_dump()
             await self.broadcast_to_room(room_id, outbound_msg)
 
-        # Word-boundary regex check for @agent trigger (prevents false positives like @agentic)
-        if re.search(r'\b@agent\b', content, re.IGNORECASE):
+        # Correct regex matching for @agent trigger at start/space boundary
+        if re.search(r'(?:^|\s)@agent(?:[.,!?\s]|$)', content, re.IGNORECASE):
             # Trigger agent response as background task so WS loop remains responsive
             asyncio.create_task(self._process_and_broadcast_agent(room_id, user_id, content))
 
