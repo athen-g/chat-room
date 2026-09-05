@@ -9,6 +9,7 @@ interface MessageBubbleProps {
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, currentUserId }) => {
   const isSelf = message.user_id === currentUserId;
   const isAgent = message.role === 'agent' || message.user_id === 'Agent';
+  const isTargetedToSelf = isAgent && message.target_user_id === currentUserId;
   const isSystem = message.role === 'system';
 
   if (isSystem) {
@@ -33,29 +34,36 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, currentUs
 
   return (
     <div className={`my-4 flex flex-col font-mono ${isSelf ? 'items-end' : 'items-start'}`}>
-      {/* Message Frame Container */}
-      <div className={`max-w-[85%] border ${
-        isAgent
-          ? 'border-2 border-hazard bg-black'
+      {/* Message Frame Container with Custom Envelopes */}
+      <div className={`max-w-[85%] border p-3 space-y-2 ${
+        isTargetedToSelf
+          ? 'border-2 border-purple-500 bg-purple-950/20 text-purple-100 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
+          : isAgent
+          ? 'border-2 border-hazard bg-black text-phosphor'
           : isSelf
-          ? 'border-l-4 border-l-hazard border-neutral-800 bg-neutral-900'
+          ? 'border-l-4 border-l-purple-500 border-neutral-800 bg-purple-950/10'
           : 'border-l-4 border-l-neutral-600 border-neutral-800 bg-neutral-950'
-      } p-3 space-y-2`}>
+      }`}>
         {/* Telemetry Header */}
         <div className="flex items-center justify-between gap-4 text-[11px] border-b border-neutral-800 pb-1.5 uppercase font-bold tracking-wider">
           <div className="flex items-center gap-2">
             <span className={`px-1.5 py-0.5 text-[10px] ${
-              isAgent
+              isTargetedToSelf
+                ? 'bg-purple-500 text-black font-extrabold'
+                : isAgent
                 ? 'bg-hazard text-black font-extrabold'
                 : isSelf
-                ? 'bg-neutral-800 text-hazard'
+                ? 'bg-purple-900/60 text-purple-300 border border-purple-700/50'
                 : 'bg-neutral-800 text-neutral-400'
             }`}>
               {isAgent ? '[ AGENT ]' : isSelf ? '[ YOU ]' : `[ ${message.user_id} ]`}
             </span>
+
             {isAgent && message.target_user_id && (
-              <span className="text-neutral-400 text-[10px]">
-                &gt;&gt; TARGET: <strong className="text-hazard">@{message.target_user_id}</strong>
+              <span className={`text-[10px] ${isTargetedToSelf ? 'text-purple-300 font-bold' : 'text-neutral-400'}`}>
+                &gt;&gt; TARGET: <strong className={isTargetedToSelf ? 'text-purple-400 underline' : 'text-hazard'}>
+                  @{message.target_user_id} {isTargetedToSelf && '(YOU)'}
+                </strong>
               </span>
             )}
           </div>
@@ -67,7 +75,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, currentUs
 
         {/* Message Content */}
         <div className={`text-xs md:text-sm leading-relaxed whitespace-pre-wrap ${
-          isAgent ? 'text-white font-mono' : 'text-neutral-200'
+          isTargetedToSelf
+            ? 'text-purple-100 font-mono font-medium'
+            : isAgent
+            ? 'text-white font-mono'
+            : isSelf
+            ? 'text-purple-100 font-mono'
+            : 'text-neutral-200'
         }`}>
           {message.content}
         </div>
@@ -75,7 +89,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, currentUs
         {/* Footer Metadata */}
         <div className="text-[9px] text-neutral-600 pt-1 flex justify-between uppercase">
           <span>MSG_ID: #{message.id}</span>
-          <span>ISOLATION_STATUS: ENFORCED</span>
+          <span className={isTargetedToSelf ? 'text-purple-400/80 font-bold' : ''}>
+            {isTargetedToSelf ? 'ISOLATED_THREAD: YOUR_CONTEXT' : 'ISOLATION_STATUS: ENFORCED'}
+          </span>
         </div>
       </div>
     </div>
